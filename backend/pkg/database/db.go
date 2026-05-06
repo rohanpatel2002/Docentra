@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 
+	"ai-document-assistant/internal/models"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -32,6 +34,12 @@ func ConnectDB() {
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v. Please ensure PostgreSQL is running.", err)
+	}
+	// Automigrate our schemas
+	log.Println("Running database migrations...")
+	err = DB.AutoMigrate(&models.User{})
+	if err != nil {
+		log.Fatalf("Failed to migrate database schemas: %v", err)
 	}
 	log.Println("Successfully connected to the PostgreSQL database")
 }
