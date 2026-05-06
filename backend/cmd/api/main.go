@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
+	"ai-document-assistant/internal/api/handlers"
+	customMiddleware "ai-document-assistant/internal/api/middleware"
 	"ai-document-assistant/pkg/database"
 
 	"github.com/go-chi/chi/v5"
@@ -24,15 +27,40 @@ func main() {
 
 	// 3. Initializing router
 	r := chi.NewRouter()
-	//Basic middleware
+
+	// Basic middleware
 	r.Use(middleware.Logger)    //Logs every incoming request
 	r.Use(middleware.Recoverer) // Prevents the server from crashing
+
 	// 4. Create a basic health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status": "ok", "message": "AI Document Assistant API is running!"}`))
 	})
+
+	// Auth Routes
+	r.Post("/api/register", handlers.Register)
+	r.Post("/api/login", handlers.Login)
+
+	// --- Protected Routes ---
+	// Creating a routed group securely backed by our JWT AuthMiddleware
+	r.Group(func(r chi.Router) {
+		r.Use(customMiddleware.AuthMiddleware)
+
+		r.Get("/api/protected/me", func(w http.ResponseWriter, r *http.Request) {
+			userID := r.Context().Value(customMiddleware.UserIDKey)
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":  "success",
+				"message": "You securely accessed a protected route using JWT Authentication!",
+				"user_id": userID,
+			})
+		})
+	})
+
 	//Start server
 	port := os.Getenv("PORT")
 	if port == "" {
