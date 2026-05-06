@@ -8,6 +8,7 @@ import (
 
 	"ai-document-assistant/internal/api/handlers"
 	customMiddleware "ai-document-assistant/internal/api/middleware"
+	"ai-document-assistant/internal/repository"
 	"ai-document-assistant/pkg/database"
 
 	"github.com/go-chi/chi/v5"
@@ -16,14 +17,18 @@ import (
 )
 
 func main() {
-	// 1. Load env file
+	// Load env file
 	err := godotenv.Load(".env")
 	if err != nil {
 		log.Println("No .env file found, relying on system environment variables")
 	}
 
-	// 2. Initialize the Database connection
+	// Initialize the Database connection
 	database.ConnectDB()
+
+	// Initialize dependencies
+	userRepo := repository.NewUserRepository(database.DB)
+	authHandler := handlers.NewAuthHandler(userRepo)
 
 	// 3. Initializing router
 	r := chi.NewRouter()
@@ -32,7 +37,7 @@ func main() {
 	r.Use(middleware.Logger)    //Logs every incoming request
 	r.Use(middleware.Recoverer) // Prevents the server from crashing
 
-	// 4. Create a basic health check endpoint
+	// Create a basic health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -40,17 +45,14 @@ func main() {
 	})
 
 	// Auth Routes
-	r.Post("/api/register", handlers.Register)
-	r.Post("/api/login", handlers.Login)
+	r.Post("/api/register", authHandler.Register)
+	r.Post("/api/login", authHandler.Login)
 
-	// --- Protected Routes ---
-	// Creating a routed group securely backed by our JWT AuthMiddleware
+	// Protected Routes
 	r.Group(func(r chi.Router) {
 		r.Use(customMiddleware.AuthMiddleware)
-
 		r.Get("/api/protected/me", func(w http.ResponseWriter, r *http.Request) {
 			userID := r.Context().Value(customMiddleware.UserIDKey)
-
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{
