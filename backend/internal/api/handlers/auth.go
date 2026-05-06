@@ -2,12 +2,20 @@ package handlers
 
 import (
 	"ai-document-assistant/internal/models"
-	"ai-document-assistant/pkg/database"
+	"ai-document-assistant/internal/repository"
 	"ai-document-assistant/pkg/utils"
 	"encoding/json"
 	"net/http"
 	"strings"
 )
+
+type AuthHandler struct {
+	userRepo repository.UserRepository
+}
+
+func NewAuthHandler(repo repository.UserRepository) *AuthHandler {
+	return &AuthHandler{userRepo: repo}
+}
 
 type AuthRequest struct {
 	Email    string `json:"email"`
@@ -15,7 +23,7 @@ type AuthRequest struct {
 }
 
 // Register user
-func Register(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req AuthRequest
 	// Parse the JSON payload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -24,8 +32,12 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	// Sanitization and validation
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-	if req.Email == "" || len(req.Password) < 8 {
-		http.Error(w, `{"error": "Email is required and password must be at least 8 characters long"}`, http.StatusBadRequest)
+	if req.Email == "" {
+		http.Error(w, `{"error": "Email is required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Password) < 8 {
+		http.Error(w, `{"error": "Password must be at least 8 characters long"}`, http.StatusBadRequest)
 		return
 	}
 	// Prevents bcrypt overflow vulnerability
@@ -34,8 +46,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check if the user already exists to prevent multiple copies or entries with the same email
-	var existingUser models.User
-	if err := database.DB.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
+	if existingUser, err := h.userRepo.GetUserByEmail(req.Email); err == nil && existingUser.ID != 0 {
 		http.Error(w, `{"error": "Email is already in use"}`, http.StatusConflict)
 		return
 	}
@@ -50,7 +61,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		Email:        req.Email,
 		PasswordHash: hashedPassword,
 	}
-	if err := database.DB.Create(&newUser).Error; err != nil {
+	if err := h.userRepo.CreateUser(&newUser); err != nil {
 		http.Error(w, `{"error": "Failed to create user account"}`, http.StatusInternalServerError)
 		return
 	}
@@ -65,7 +76,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login authentication and generates a secure JWT
-func Login(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req AuthRequest
 	// Parse safely
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -73,9 +84,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-	// Retrieves the user from the database
-	var user models.User
-	if err := database.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+	// Retrieves the user from the database via repository
+	user, err := h.userRepo.GetUserByEmail(req.Email)
+	if err != nil {
 		http.Error(w, `{"error": "Invalid email or password"}`, http.StatusUnauthorized)
 		return
 	}
