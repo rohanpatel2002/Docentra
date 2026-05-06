@@ -9,5 +9,5 @@ RUN touch requirements.txt && pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 8000
-# Placeholder run command until FastAPI is set up
+# Placeholder run command until Fastapi is set up
 CMD ["tail", "-f", "/dev/null"]
