@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 type AIService interface {
@@ -37,14 +38,27 @@ func (s *aiService) GetEmbeddings(ctx context.Context, text string) ([]ChunkResu
 	// Execute Python CLI command securely
 	cmd := exec.CommandContext(ctx, s.pythonPath, s.scriptPath, "--text", text)
 
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output() // Use Output() instead of CombinedOutput to ignore stderr
 	if err != nil {
-		return nil, fmt.Errorf("python execution failed: %w (output: %s)", err, string(output))
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("python execution failed: %w (stderr: %s)", err, string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("python execution failed: %w", err)
 	}
 
+	// Clean output: find the first '{' and last '}' to handle potential warnings in stdout
+	cleanOutput := string(output)
+	start := strings.Index(cleanOutput, "{")
+	end := strings.LastIndex(cleanOutput, "}")
+
+	if start == -1 || end == -1 || start > end {
+		return nil, fmt.Errorf("no valid JSON found in python output: %s", cleanOutput)
+	}
+	cleanOutput = cleanOutput[start : end+1]
+
 	var resp cliResponse
-	if err := json.Unmarshal(output, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse python output: %w", err)
+	if err := json.Unmarshal([]byte(cleanOutput), &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse python output: %w (raw output: %s)", err, cleanOutput)
 	}
 
 	return resp.Chunks, nil

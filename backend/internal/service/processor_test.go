@@ -54,6 +54,19 @@ func (m *MockDocRepo) SearchSimilarChunks(userID uint, queryVector pgvector.Vect
 	return nil, args.Error(1)
 }
 
+func (m *MockDocRepo) DeleteDocument(id uint, userID uint) error {
+	args := m.Called(id, userID)
+	return args.Error(0)
+}
+
+func (m *MockDocRepo) GetDocumentsByUserID(userID uint) ([]models.Document, error) {
+	args := m.Called(userID)
+	if args.Get(0) != nil {
+		return args.Get(0).([]models.Document), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 // Handles file access mocking
 type MockStorage struct {
 	mock.Mock
