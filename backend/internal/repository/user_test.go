@@ -56,7 +56,7 @@ func TestUserRepository_GetUserByEmail(t *testing.T) {
 	now := time.Now().Truncate(time.Microsecond) // PostgreSQL truncates precision
 	rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "created_at", "updated_at", "deleted_at"}).
 		AddRow(1, email, "hashedpassword", now, now, nil)
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "users" WHERE email = 1 AND "users"."deleted_at" IS NULL ORDER BY "users"."id" LIMIT $2`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "users" WHERE email = $1 AND "users"."deleted_at" IS NULL ORDER BY "users"."id" LIMIT $2`)).
 		WithArgs(email, 1).
 		WillReturnRows(rows)
 	resUser, err := repo.GetUserByEmail(email)
@@ -76,7 +76,7 @@ func TestUserRepository_GetUserByID(t *testing.T) {
 	now := time.Now().Truncate(time.Microsecond)
 	rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "created_at", "updated_at", "deleted_at"}).
 		AddRow(id, "test@example.com", "hashedpassword", now, now, nil)
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "users" WHERE "users"."id" = 1 AND "users"."deleted_at" IS NULL ORDER BY "users"."id" LIMIT $2`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "users" WHERE "users"."id" = $1 AND "users"."deleted_at" IS NULL ORDER BY "users"."id" LIMIT $2`)).
 		WithArgs(id, 1). // Limit is usually bound to an argument in GORM Postgres
 		WillReturnRows(rows)
 	resUser, err := repo.GetUserByID(id)

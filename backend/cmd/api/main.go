@@ -9,6 +9,7 @@ import (
 	"ai-document-assistant/internal/api/handlers"
 	customMiddleware "ai-document-assistant/internal/api/middleware"
 	"ai-document-assistant/internal/repository"
+	"ai-document-assistant/internal/storage"
 	"ai-document-assistant/pkg/database"
 
 	"github.com/go-chi/chi/v5"
@@ -29,6 +30,14 @@ func main() {
 	// Initialize dependencies
 	userRepo := repository.NewUserRepository(database.DB)
 	authHandler := handlers.NewAuthHandler(userRepo)
+
+	// Day 3: Initialize Storage and Document Handler
+	localStore, err := storage.NewLocalStorage("uploads")
+	if err != nil {
+		log.Fatalf("Failed to initialize secure local storage: %v", err)
+	}
+	docRepo := repository.NewDocumentRepository(database.DB)
+	docHandler := handlers.NewDocumentHandler(docRepo, localStore)
 
 	// 3. Initializing router
 	r := chi.NewRouter()
@@ -51,6 +60,10 @@ func main() {
 	// Protected Routes
 	r.Group(func(r chi.Router) {
 		r.Use(customMiddleware.AuthMiddleware)
+
+		// Day 3: Protected Document Upload
+		r.Post("/api/documents", docHandler.UploadDocument)
+
 		r.Get("/api/protected/me", func(w http.ResponseWriter, r *http.Request) {
 			userID := r.Context().Value(customMiddleware.UserIDKey)
 			w.Header().Set("Content-Type", "application/json")
