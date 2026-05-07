@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"ai-document-assistant/internal/repository"
 	"ai-document-assistant/internal/service"
 	"ai-document-assistant/internal/storage"
-	"ai-document-assistant/pkg/client"
 	"ai-document-assistant/pkg/database"
 
 	"github.com/go-chi/chi/v5"
@@ -25,37 +23,37 @@ func main() {
 	if err != nil {
 		log.Println("No .env file found, relying on system environment variables")
 	}
-
 	// Initialize the Database connection
 	database.ConnectDB()
-
+	// CLI paths
+	pythonPath := os.Getenv("PYTHON_PATH")
+	if pythonPath == "" {
+		pythonPath = "/Users/rohan/Desktop/AI Document Assistant/embedding-service/.venv/bin/python3"
+	}
+	scriptPath := "/Users/rohan/Desktop/AI Document Assistant/embedding-service/app/main.py"
 	// Initialize dependencies
 	userRepo := repository.NewUserRepository(database.DB)
 	authHandler := handlers.NewAuthHandler(userRepo)
-
-	// Day 3: Initialize Storage and Document Handler
+	// Initialize Storage and Document Handler
 	localStore, err := storage.NewLocalStorage("uploads")
 	if err != nil {
 		log.Fatalf("Failed to initialize secure local storage: %v", err)
 	}
 	docRepo := repository.NewDocumentRepository(database.DB)
-
-	// Day 4: Initialize Embedding Client and Orchestrator
-	embedURL := os.Getenv("EMBEDDING_SERVICE_URL")
-	if embedURL == "" {
-		embedURL = "http://localhost:8000" // Default for local dev
-	}
-	embedClient := client.NewEmbeddingClient(embedURL)
-	docProcessor := service.NewProcessor(docRepo, localStore, embedClient)
-
+	// CLI based Ai Services
+	aiSvc := service.NewAIService(pythonPath, scriptPath)
+	searchHandler := handlers.NewSearchHandler(docRepo, aiSvc)
+	docProcessor := service.NewProcessor(docRepo, localStore, aiSvc)
 	docHandler := handlers.NewDocumentHandler(docRepo, localStore, docProcessor)
-
-	// 3. Initializing router
+	// Initializing router
 	r := chi.NewRouter()
 
-	// Basic middleware
-	r.Use(middleware.Logger)    //Logs every incoming request
-	r.Use(middleware.Recoverer) // Prevents the server from crashing
+	// Operational & Security Base
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(customMiddleware.CORS)            // Cross-Origin Support
+	r.Use(customMiddleware.RateLimit)       // Protection from overuse
+	r.Use(customMiddleware.SecurityHeaders) // Browser Security Protection
 
 	// Create a basic health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -67,26 +65,17 @@ func main() {
 	// Auth Routes
 	r.Post("/api/register", authHandler.Register)
 	r.Post("/api/login", authHandler.Login)
-
-	// Protected Routes
+	// Protected Routes (Identity Verified)
 	r.Group(func(r chi.Router) {
 		r.Use(customMiddleware.AuthMiddleware)
-
-		// Day 3: Protected Document Upload
+		// Document Management
 		r.Post("/api/documents", docHandler.UploadDocument)
-
-		r.Get("/api/protected/me", func(w http.ResponseWriter, r *http.Request) {
-			userID := r.Context().Value(customMiddleware.UserIDKey)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":  "success",
-				"message": "You securely accessed a protected route using JWT Authentication!",
-				"user_id": userID,
-			})
+		r.Post("/api/search", searchHandler.Search)
+		// Authorisation Restricted (Ownership Verified)
+		r.Group(func(r chi.Router) {
+			r.Use(customMiddleware.Ownership(docRepo))
 		})
 	})
-
 	//Start server
 	port := os.Getenv("PORT")
 	if port == "" {

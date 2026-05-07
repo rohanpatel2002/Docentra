@@ -1,15 +1,13 @@
 package service
 
 import (
-	"context"
-	"fmt"
-	"log"
-
 	"ai-document-assistant/internal/models"
 	"ai-document-assistant/internal/repository"
 	"ai-document-assistant/internal/storage"
-	"ai-document-assistant/pkg/client"
 	"ai-document-assistant/pkg/parser"
+	"context"
+	"fmt"
+	"log"
 
 	"github.com/pgvector/pgvector-go"
 )
@@ -19,15 +17,15 @@ type Processor struct {
 	repo      repository.DocumentRepository
 	storage   storage.Provider
 	extractor *parser.Extractor
-	embedder  *client.EmbeddingClient
+	aiSvc     AIService
 }
 
-func NewProcessor(repo repository.DocumentRepository, store storage.Provider, embedder *client.EmbeddingClient) *Processor {
+func NewProcessor(repo repository.DocumentRepository, store storage.Provider, aiSvc AIService) *Processor {
 	return &Processor{
 		repo:      repo,
 		storage:   store,
 		extractor: parser.NewExtractor(),
-		embedder:  embedder,
+		aiSvc:     aiSvc,
 	}
 }
 
@@ -51,26 +49,34 @@ func (p *Processor) ProcessDocument(ctx context.Context, docID uint, userID uint
 		p.updateStatus(doc, models.StatusError)
 		return fmt.Errorf("extraction failure: %w", err)
 	}
-	// Generate Ai Embeddings
-	vectors, err := p.embedder.GetEmbedding(ctx, text)
+	// CLI based processing via aiservice
+	chunks, err := p.aiSvc.GetEmbeddings(ctx, text)
 	if err != nil {
 		p.updateStatus(doc, models.StatusError)
-		return fmt.Errorf("AI embedding failure: %w", err)
+		return fmt.Errorf("AI service processing failure: %w", err)
 	}
-
-	// Save embedding to DB
-	float32Vectors := make([]float32, len(vectors))
-	for i, v := range vectors {
-		float32Vectors[i] = float32(v)
+	// Prepare chunks for batch insertion
+	dbChunks := make([]models.DocumentChunk, len(chunks))
+	for i, c := range chunks {
+		dbChunks[i] = models.DocumentChunk{
+			DocumentID: docID,
+			UserID:     userID,
+			Content:    c.Content,
+			Embedding:  pgvector.NewVector(c.Embedding),
+		}
 	}
-	doc.Embedding = pgvector.NewVector(float32Vectors)
+	if err := p.repo.CreateDocumentChunks(dbChunks); err != nil {
+		p.updateStatus(doc, models.StatusError)
+		return fmt.Errorf("failed to save chunks: %w", err)
+	}
+	// Mark entire document as ready for search
 	doc.Status = models.StatusReady
 	if err := p.repo.UpdateDocument(doc); err != nil {
-		return fmt.Errorf("failed to save vectorized document: %w", err)
+		return fmt.Errorf("failed to finalize document status: %w", err)
 	}
 
 	// Log success
-	log.Printf("Document %d vectorized and stored successfully", doc.ID)
+	log.Printf("Document %d processed via Python CLI into %d chunks and stored successfully", doc.ID, len(chunks))
 	return nil
 }
 
