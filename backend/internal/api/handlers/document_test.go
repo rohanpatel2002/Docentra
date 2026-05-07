@@ -3,6 +3,7 @@ package handlers
 import (
 	"ai-document-assistant/internal/api/middleware"
 	"ai-document-assistant/internal/models"
+	"ai-document-assistant/internal/repository"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	pgvector "github.com/pgvector/pgvector-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -41,6 +43,24 @@ func (m *MockDocumentRepository) GetDocumentByID(id uint, userID uint) (*models.
 func (m *MockDocumentRepository) UpdateDocument(doc *models.Document) error {
 	args := m.Called(doc)
 	return args.Error(0)
+}
+
+func (m *MockDocumentRepository) CreateDocumentChunk(chunk *models.DocumentChunk) error {
+	args := m.Called(chunk)
+	return args.Error(0)
+}
+
+func (m *MockDocumentRepository) CreateDocumentChunks(chunks []models.DocumentChunk) error {
+	args := m.Called(chunks)
+	return args.Error(0)
+}
+
+func (m *MockDocumentRepository) SearchSimilarChunks(userID uint, queryVector pgvector.Vector, limit int) ([]repository.SearchResult, error) {
+	args := m.Called(userID, queryVector, limit)
+	if args.Get(0) != nil {
+		return args.Get(0).([]repository.SearchResult), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 // Simulates the physical hard drive storage disk
