@@ -6,17 +6,16 @@ require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
+	github.com/pgvector/pgvector-go v0.3.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.36.0
+	golang.org/x/time v0.15.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
 )
 
-require (
-	github.com/lib/pq v1.12.3 // indirect
-	github.com/pgvector/pgvector-go v0.3.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
-)
+require github.com/lib/pq v1.12.3 // indirect
 
 require github.com/google/uuid v1.6.0 // direct
 

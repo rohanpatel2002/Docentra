@@ -12,8 +12,10 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -109,4 +111,70 @@ func (h *DocumentHandler) UploadDocument(w http.ResponseWriter, r *http.Request)
 		"filename":    doc.OriginalName,
 		"status":      doc.Status,
 	})
+}
+
+// GetDocuments returns all documents for a user
+func (h *DocumentHandler) GetDocuments(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uint)
+
+	docs, err := h.docRepo.GetDocumentsByUserID(userID)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to fetch documents"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(docs)
+}
+
+// GetDocumentStatus returns the processing status of a document
+func (h *DocumentHandler) GetDocumentStatus(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uint)
+	docIDStr := chi.URLParam(r, "id")
+	docID, err := strconv.ParseUint(docIDStr, 10, 32)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid document ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	doc, err := h.docRepo.GetDocumentByID(uint(docID), userID)
+	if err != nil {
+		http.Error(w, `{"error": "Document not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"id":     strconv.Itoa(int(doc.ID)),
+		"status": string(doc.Status),
+	})
+}
+
+// DeleteDocument removes a document and its data
+func (h *DocumentHandler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uint)
+	docIDStr := chi.URLParam(r, "id")
+	docID, err := strconv.ParseUint(docIDStr, 10, 32)
+	if err != nil {
+		http.Error(w, `{"error": "Invalid document ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Get file info first to delete from storage
+	doc, err := h.docRepo.GetDocumentByID(uint(docID), userID)
+	if err != nil {
+		http.Error(w, `{"error": "Document not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Delete from DB (Transaction includes chunks)
+	if err := h.docRepo.DeleteDocument(uint(docID), userID); err != nil {
+		http.Error(w, `{"error": "Failed to delete document metadata"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Best-effort delete from storage
+	_ = h.storage.Delete(doc.StoragePath)
+
+	w.WriteHeader(http.StatusNoContent)
 }
