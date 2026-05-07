@@ -18,7 +18,9 @@ type SearchResult struct {
 type DocumentRepository interface {
 	CreateDocument(doc *models.Document) error
 	GetDocumentByID(id uint, userID uint) (*models.Document, error)
+	GetDocumentsByUserID(userID uint) ([]models.Document, error)
 	UpdateDocument(doc *models.Document) error
+	DeleteDocument(id uint, userID uint) error
 	CreateDocumentChunk(chunk *models.DocumentChunk) error
 	CreateDocumentChunks(chunks []models.DocumentChunk) error
 	SearchSimilarChunks(userID uint, queryVector pgvector.Vector, limit int) ([]SearchResult, error)
@@ -37,8 +39,28 @@ func (r *documentRepository) CreateDocument(doc *models.Document) error {
 	return r.db.Create(doc).Error
 }
 
+func (r *documentRepository) GetDocumentsByUserID(userID uint) ([]models.Document, error) {
+	var docs []models.Document
+	err := r.db.Where("user_id = ?", userID).Find(&docs).Error
+	return docs, err
+}
+
 func (r *documentRepository) UpdateDocument(doc *models.Document) error {
 	return r.db.Save(doc).Error
+}
+
+func (r *documentRepository) DeleteDocument(id uint, userID uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Delete chunks first (foreign key or manual)
+		if err := tx.Where("document_id = ? AND user_id = ?", id, userID).Delete(&models.DocumentChunk{}).Error; err != nil {
+			return err
+		}
+		// Delete document
+		if err := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Document{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (r *documentRepository) CreateDocumentChunk(chunk *models.DocumentChunk) error {

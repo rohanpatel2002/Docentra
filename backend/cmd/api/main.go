@@ -43,6 +43,7 @@ func main() {
 	// CLI based Ai Services
 	aiSvc := service.NewAIService(pythonPath, scriptPath)
 	searchHandler := handlers.NewSearchHandler(docRepo, aiSvc)
+	queryHandler := handlers.NewQueryHandler(docRepo, aiSvc)
 	docProcessor := service.NewProcessor(docRepo, localStore, aiSvc)
 	docHandler := handlers.NewDocumentHandler(docRepo, localStore, docProcessor)
 	// Initializing router
@@ -69,12 +70,13 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(customMiddleware.AuthMiddleware)
 		// Document Management
+		r.Get("/api/documents", docHandler.GetDocuments)
 		r.Post("/api/documents", docHandler.UploadDocument)
+		r.Get("/api/documents/{id}", docHandler.GetDocumentStatus)
+		r.Delete("/api/documents/{id}", docHandler.DeleteDocument)
+
 		r.Post("/api/search", searchHandler.Search)
-		// Authorisation Restricted (Ownership Verified)
-		r.Group(func(r chi.Router) {
-			r.Use(customMiddleware.Ownership(docRepo))
-		})
+		r.Post("/api/query", queryHandler.Query)
 	})
 	//Start server
 	port := os.Getenv("PORT")

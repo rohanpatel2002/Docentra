@@ -63,6 +63,19 @@ func (m *MockDocumentRepository) SearchSimilarChunks(userID uint, queryVector pg
 	return nil, args.Error(1)
 }
 
+func (m *MockDocumentRepository) DeleteDocument(id uint, userID uint) error {
+	args := m.Called(id, userID)
+	return args.Error(0)
+}
+
+func (m *MockDocumentRepository) GetDocumentsByUserID(userID uint) ([]models.Document, error) {
+	args := m.Called(userID)
+	if args.Get(0) != nil {
+		return args.Get(0).([]models.Document), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 // Simulates the physical hard drive storage disk
 type MockStorageProvider struct {
 	mock.Mock
