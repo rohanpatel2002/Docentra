@@ -5,3 +5,4 @@ __pycache__/
 /backend/bin/
 .DS_Store
 tmp/
+backend/uploads/
