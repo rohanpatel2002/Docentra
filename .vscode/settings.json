@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/embedding-service/.venv/bin/python",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/embedding-service/app",
+        "${workspaceFolder}/embedding-service/.venv/lib/python3.9/site-packages"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticMode": "workspace"
+}
