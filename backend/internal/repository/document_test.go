@@ -39,6 +39,7 @@ func TestDocumentRepository_CreateDocument(t *testing.T) {
 			doc.Size,
 			doc.StoragePath,
 			doc.Status,
+			sqlmock.AnyArg(), // Embedding
 			doc.CreatedAt,
 			doc.UpdatedAt,
 			sqlmock.AnyArg(), // deleted_at

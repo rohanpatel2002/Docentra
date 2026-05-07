@@ -4,10 +4,12 @@ import (
 	"ai-document-assistant/internal/api/middleware"
 	"ai-document-assistant/internal/models"
 	"ai-document-assistant/internal/repository"
+	"ai-document-assistant/internal/service"
 	"ai-document-assistant/internal/storage"
-	"ai-document-assistant/pkg/parser"
 	"ai-document-assistant/pkg/utils"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -17,15 +19,17 @@ import (
 
 // Document uploads, utilizing abstracted storage and database layers
 type DocumentHandler struct {
-	docRepo repository.DocumentRepository
-	storage storage.Provider
+	docRepo   repository.DocumentRepository
+	storage   storage.Provider
+	processor *service.Processor
 }
 
 // Initializes the handler with injected dependencies
-func NewDocumentHandler(repo repository.DocumentRepository, store storage.Provider) *DocumentHandler {
+func NewDocumentHandler(repo repository.DocumentRepository, store storage.Provider, proc *service.Processor) *DocumentHandler {
 	return &DocumentHandler{
-		docRepo: repo,
-		storage: store,
+		docRepo:   repo,
+		storage:   store,
+		processor: proc,
 	}
 }
 
@@ -76,15 +80,7 @@ func (h *DocumentHandler) UploadDocument(w http.ResponseWriter, r *http.Request)
 		MimeType:     mimeType,
 		Size:         header.Size,
 		StoragePath:  storagePath,
-		Status:       models.StatusReady, // Updating to Ready directly for txt context
-	}
-
-	extractor := parser.NewExtractor()
-	// Re-open saved file to extract text without eating RAM
-	fileReader, err := h.storage.Get(storagePath)
-	if err == nil {
-		defer fileReader.Close()
-		_, _ = extractor.Extract(fileReader, mimeType) // We can save extracted text to DB or VDB later
+		Status:       models.StatusReady, // Initial status
 	}
 
 	if err := h.docRepo.CreateDocument(&doc); err != nil {
@@ -92,6 +88,17 @@ func (h *DocumentHandler) UploadDocument(w http.ResponseWriter, r *http.Request)
 		_ = h.storage.Delete(storagePath)
 		http.Error(w, `{"error": "Failed to record document metadata"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Trigger high-efficiency background processing
+	if h.processor != nil {
+		go func() {
+			ctx := context.Background()
+			if err := h.processor.ProcessDocument(ctx, doc.ID, userID); err != nil {
+				// In production, we would log this to a system like Sentry
+				fmt.Printf("Asynchronous processing failure for doc %d: %v\n", doc.ID, err)
+			}
+		}()
 	}
 	// Send sanitized response JSON
 	w.Header().Set("Content-Type", "application/json")

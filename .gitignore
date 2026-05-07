@@ -6,3 +6,16 @@ __pycache__/
 .DS_Store
 tmp/
 backend/uploads/
+venv/
+.env
+__pycache__/
+*.pyc
+/backend/bin/
+.DS_Store
+tmp/
+backend/uploads/
+
+# Python virtual environments
+.venv/
+venv/
+ENV/

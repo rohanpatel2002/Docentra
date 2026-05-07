@@ -10,6 +10,7 @@ import (
 type DocumentRepository interface {
 	CreateDocument(doc *models.Document) error
 	GetDocumentByID(id uint, userID uint) (*models.Document, error)
+	UpdateDocument(doc *models.Document) error
 }
 type documentRepository struct {
 	db *gorm.DB
@@ -24,6 +25,11 @@ func NewDocumentRepository(db *gorm.DB) DocumentRepository {
 func (r *documentRepository) CreateDocument(doc *models.Document) error {
 	return r.db.Create(doc).Error
 }
+
+func (r *documentRepository) UpdateDocument(doc *models.Document) error {
+	return r.db.Save(doc).Error
+}
+
 func (r *documentRepository) GetDocumentByID(id uint, userID uint) (*models.Document, error) {
 	var doc models.Document
 	err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&doc).Error

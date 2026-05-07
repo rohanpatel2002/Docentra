@@ -35,9 +35,13 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v. Please ensure PostgreSQL is running.", err)
 	}
+
+	// Create pgvector extension
+	DB.Exec("CREATE EXTENSION IF NOT EXISTS vector")
+
 	// Automigrate our schemas
 	log.Println("Running database migrations...")
-	err = DB.AutoMigrate(&models.User{}, &models.Document{})
+	err = DB.AutoMigrate(&models.User{}, &models.Document{}, &models.DocumentChunk{})
 	if err != nil {
 		log.Fatalf("Failed to migrate database schemas: %v", err)
 	}
