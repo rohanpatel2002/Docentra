@@ -20,7 +20,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
     container_name: doc_ai_backend
     restart: unless-stopped
     ports:
