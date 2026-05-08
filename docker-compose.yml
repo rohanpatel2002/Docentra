@@ -1,8 +1,5 @@
-version: '3.8'
-
 services:
   db:
-    # Upgraded to include pgvector extension for semantic search
     image: ankane/pgvector:v0.5.1
     container_name: doc_ai_postgres
     restart: always
@@ -14,11 +11,18 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aidocdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: doc_ai_backend
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -27,19 +31,22 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=aidocdb
-      - EMBEDDING_SERVICE_URL=http://embedding-service:8000
+      - PORT=8080
+      - PYTHON_PATH=python3
+      - SCRIPT_PATH=/app/embedding-service/app/main.py
     depends_on:
-      - db
-      - embedding-service
-
-  embedding-service:
-    build:
-      context: ./embedding-service
-    container_name: doc_ai_embedding
-    ports:
-      - "8000:8000"
-    environment:
-      - PORT=8000
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+      - model_cache:/app/.cache
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).read()\""]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:
+  uploads:
+  model_cache:

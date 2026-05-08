@@ -25,12 +25,16 @@ func main() {
 	}
 	// Initialize the Database connection
 	database.ConnectDB()
-	// CLI paths
+	// CLI paths for embedding generation.
+	// Defaults are Docker-friendly override via env vars if needed.
 	pythonPath := os.Getenv("PYTHON_PATH")
 	if pythonPath == "" {
-		pythonPath = "/Users/rohan/Desktop/AI Document Assistant/embedding-service/.venv/bin/python3"
+		pythonPath = "python3"
 	}
-	scriptPath := "/Users/rohan/Desktop/AI Document Assistant/embedding-service/app/main.py"
+	scriptPath := os.Getenv("SCRIPT_PATH")
+	if scriptPath == "" {
+		scriptPath = "/app/embedding-service/app/main.py"
+	}
 	// Initialize dependencies
 	userRepo := repository.NewUserRepository(database.DB)
 	authHandler := handlers.NewAuthHandler(userRepo)
